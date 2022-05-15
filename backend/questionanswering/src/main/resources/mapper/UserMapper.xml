@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+	"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+	
+	
+<mapper namespace="com.restful.questionanswering.dao.UserDao">	
+	<select id="retrievePassword" parameterType="String" resultType="String">
+		SELECT Pwd FROM users WHERE UEmail = #{useremail}
+	</select>
+
+	<select id="retrieveProfile" parameterType="String" resultMap="resultMapUser">
+		SELECT UEmail, UName, SID, Score, City, State, Country, UProfile, Pwd FROM users WHERE UEmail = #{useremail}
+	</select>
+	<resultMap id="resultMapUser" type="com.restful.questionanswering.Profiles" >	
+        <id column="UEmail" property="email"/>
+        <result column="UName" property="username"/>
+        <result column="SID" property="status"/>
+        <result column="Score" property="score"/>
+        <result column="City" property="city"/>
+        <result column="State" property="state"/>
+        <result column="Country" property="country"/>
+        <result column="UProfile" property="profile"/>
+        <result column="Pwd" property="password"/>
+    </resultMap>
+    
+    <select id="retrieveQuestions" parameterType="String" resultMap="MapQuestion">
+    	SELECT QID, QTitle, QBody, STID, QPostTime, UEmail,isResolved FROM question WHERE UEmail = #{useremail} ORDER BY QPostTime DESC
+    </select>
+    <resultMap id="MapQuestion" type="com.restful.questionanswering.Question" >	
+    	<id column="UEmail" property="email"/>
+        <result column="QID" property="qid"/>
+        <result column="QTitle" property="qtitle"/>
+        <result column="QBody" property="qbody"/>
+        <result column="STID" property="stid"/>
+        <result column="QPostTime" property="qposttime"/>
+        <result column="isResolved" property="isresolved"/>
+    </resultMap>
+    
+    <select id="getQuestion" parameterType="int" resultMap="MapQuestion">
+    	SELECT QID, QTitle, QBody, STID, QPostTime, UEmail,isResolved FROM question WHERE QID = #{qid} 
+    </select>
+    
+    <select id="retrieveAnswers" parameterType="String" resultMap="MapAnswer">
+    	SELECT answer.UEmail, AID, ABody, APostTime, answer.QID, NumLikes, QTitle FROM answer, question WHERE answer.UEmail = #{useremail} AND answer.QID=question.QID ORDER BY APostTime DESC
+    </select>
+    <resultMap id="MapAnswer" type="com.restful.questionanswering.Answer" >	
+        <result column="UEmail" property="email"/>
+        <result column="AID" property="aid"/>
+        <result column="ABody" property="abody"/>
+        <result column="APostTime" property="aposttime"/>
+        <result column="QID" property="qid"/>
+        <result column="NumLikes" property="numlikes"/>
+        <result column="QTitle" property="qtitle"/>
+    </resultMap>
+    
+    <select id="getAnswerstoquestion" parameterType="int" resultMap="MapAnswer">
+    	SELECT answer.UEmail, AID, ABody, APostTime, answer.QID, NumLikes, QTitle FROM answer, question WHERE answer.QID = #{qid} AND answer.QID=question.QID ORDER BY APostTime DESC
+    </select>
+    
+    <select id="getStatus" parameterType="String" resultType="int">
+    	SELECT SID FROM users WHERE UEmail = #{useremail}
+    </select>
+    
+    <select id="searchQuestions" parameterType="String" resultMap="MapQuestion">
+    	SELECT QID, QTitle, QBody, question.STID, QPostTime, UEmail, isResolved FROM question, specifictopic, generaltopic WHERE question.STID=specifictopic.STID and specifictopic.GTID= generaltopic.GTID AND (QBody like #{keyword} OR QTitle like #{keyword} OR GTName like #{keyword} OR STName like #{keyword}) ORDER BY QPostTime DESC
+    </select>
+    
+    <update id="updateProfile" parameterType="com.restful.questionanswering.Profiles">
+  		update users set
+    	UName = #{username},
+    	City = #{city},
+    	State = #{state},
+    	Country = #{country},
+    	UProfile = #{profile}
+        WHERE UEmail = #{email}
+	</update>
+	
+	<insert id="register" parameterType="com.restful.questionanswering.Profiles">
+		INSERT INTO users(UEmail, UName, UProfile, SID, Pwd, City, State, Country, Score)
+		VALUE(#{email},#{username},#{profile},1,#{password},#{city},#{state},#{country},0)
+	
+	</insert>
+	
+	<insert id="createQuestion" parameterType="com.restful.questionanswering.Question">
+		INSERT INTO question(QTitle, QBody, STID, QPostTime, UEmail,isResolved)
+		VALUE(#{qtitle},#{qbody}, #{stid}, #{qposttime}, #{email}, 0)
+	</insert>
+	
+	<insert id="createAnswer" parameterType="com.restful.questionanswering.Answer">
+		INSERT INTO answer(ABody, UEmail, APostTime, QID, NumLikes)
+		VALUE(#{abody},  #{email}, #{aposttime}, #{qid}, 0)
+	</insert>
+	
+	<insert id="likes1">
+		INSERT INTO likes(UEmail,AID)
+		VALUE(#{useremail},#{aid})	
+	</insert>
+	
+	<update id="likes2">
+  		update answer set
+    	NumLikes = NumLikes + 1
+        WHERE AID = #{aid}
+	</update>
+	
+	<update id="resolved" parameterType="int">
+  		update question set
+    	isResolved =  1
+        WHERE QID = #{qid}
+	</update>
+	
+	<update id="updateSocre">
+  		UPDATE users, 
+		(SELECT PostedAnswer.UEmail, IFNULL(NumAns,0)+IFNULL(NumQ,0)+IFNULL(NumLikes,0) AS totalscore
+		 FROM (SELECT UEmail, COUNT(AID) AS NumAns FROM users NATURAL LEFT OUTER JOIN answer GROUP BY UEmail) AS PostedAnswer,
+              (SELECT UEmail, COUNT(QID) AS NumQ FROM users NATURAL LEFT OUTER JOIN question GROUP BY UEmail) AS PostedQuestions,
+              (SELECT UEmail, SUM(IFNULL(NumLikes,0)) AS NumLikes FROM users NATURAL LEFT OUTER JOIN answer GROUP BY UEmail) AS ReceivedLikes
+         WHERE PostedAnswer.UEmail = PostedQuestions.UEmail AND PostedAnswer.UEmail = ReceivedLikes.UEmail) AS scoretable
+        SET users.Score = scoretable.totalscore
+        WHERE users.UEmail = scoretable.UEmail
+	</update>
+	
+	<update id="updateStatus">
+	 	UPDATE ustatus,users
+	 	SET users.SID=ustatus.SID
+	 	WHERE Score &gt;= MinScore AND Score &lt;= MaxScore
+	</update>
+	
+</mapper>
+
